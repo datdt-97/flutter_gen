@@ -111,8 +111,8 @@ FlutterGenColors _$FlutterGenColorsFromJson(Map json) => $checkedCreate(
           enabled: $checkedConvert('enabled', (v) => v as bool),
           inputs: $checkedConvert('inputs',
               (v) => (v as List<dynamic>).map((e) => e as String).toList()),
-          outputs: $checkedConvert(
-              'outputs', (v) => FlutterGenElementOutputs.fromJson(v as Map)),
+          outputs: $checkedConvert('outputs',
+              (v) => FlutterGenElementColorsOutputs.fromJson(v as Map)),
         );
         return val;
       },
@@ -199,6 +199,27 @@ FlutterGenElementOutputs _$FlutterGenElementOutputsFromJson(Map json) =>
         );
         final val = FlutterGenElementOutputs(
           className: $checkedConvert('class_name', (v) => v as String),
+        );
+        return val;
+      },
+      fieldKeyMap: const {'className': 'class_name'},
+    );
+
+FlutterGenElementColorsOutputs _$FlutterGenElementColorsOutputsFromJson(
+        Map json) =>
+    $checkedCreate(
+      'FlutterGenElementColorsOutputs',
+      json,
+      ($checkedConvert) {
+        $checkKeys(
+          json,
+          requiredKeys: const ['class_name', 'themes', 'style'],
+        );
+        final val = FlutterGenElementColorsOutputs(
+          className: $checkedConvert('class_name', (v) => v as String),
+          themes: $checkedConvert('themes',
+              (v) => (v as List<dynamic>).map((e) => e as String).toList()),
+          style: $checkedConvert('style', (v) => v as String),
         );
         return val;
       },

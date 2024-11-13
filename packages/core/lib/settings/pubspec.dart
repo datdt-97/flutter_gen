@@ -101,7 +101,7 @@ class FlutterGenColors {
   final List<String> inputs;
 
   @JsonKey(name: 'outputs', required: true)
-  final FlutterGenElementOutputs outputs;
+  final FlutterGenElementColorsOutputs outputs;
 
   factory FlutterGenColors.fromJson(Map json) =>
       _$FlutterGenColorsFromJson(json);
@@ -190,6 +190,40 @@ class FlutterGenElementOutputs {
 
   factory FlutterGenElementOutputs.fromJson(Map json) =>
       _$FlutterGenElementOutputsFromJson(json);
+}
+
+@JsonSerializable()
+class FlutterGenElementColorsOutputs extends FlutterGenElementOutputs {
+  static const String dotDelimiterStyle = 'dot-delimiter';
+  static const String snakeCaseStyle = 'snake-case';
+  static const String camelCaseStyle = 'camel-case';
+
+  @JsonKey(name: 'themes', required: true)
+  final List<String> themes;
+
+  @JsonKey(name: 'style', required: true)
+  final String style;
+
+  bool get isDotDelimiterStyle => style == dotDelimiterStyle;
+
+  bool get isSnakeCaseStyle => style == snakeCaseStyle;
+
+  bool get isCamelCaseStyle => style == camelCaseStyle;
+
+  FlutterGenElementColorsOutputs({
+    required String className,
+    required this.themes,
+    required this.style,
+  }) : super(className: className) {
+    if (style != dotDelimiterStyle &&
+        style != snakeCaseStyle &&
+        style != camelCaseStyle) {
+      throw ArgumentError.value(style, 'style');
+    }
+  }
+
+  factory FlutterGenElementColorsOutputs.fromJson(Map json) =>
+      _$FlutterGenElementColorsOutputsFromJson(json);
 }
 
 @JsonSerializable()
