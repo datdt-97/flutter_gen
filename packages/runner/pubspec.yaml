@@ -10,7 +10,12 @@ environment:
   sdk: ^3.4.0
 
 dependencies:
-  flutter_gen_core: 5.11.0
+#  flutter_gen_core: 5.8.0
+  flutter_gen_core:
+    git:
+      url: https://github.com/datdt-97/flutter_gen.git
+      ref: rc/multiple-color-classes
+      path: packages/core
   build: '>=2.0.0 <4.0.0'
   collection: ^1.17.0
   crypto: ^3.0.0

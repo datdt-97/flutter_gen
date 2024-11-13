@@ -8,7 +8,6 @@ import 'package:flutter_gen_core/settings/pubspec.dart';
 import 'package:flutter_gen_core/utils/color.dart';
 import 'package:flutter_gen_core/utils/error.dart';
 import 'package:flutter_gen_core/utils/string.dart';
-import 'package:path/path.dart';
 import 'package:xml/xml.dart';
 
 String generateColors(
@@ -22,6 +21,9 @@ String generateColors(
     );
   }
 
+  final inputs = colorsConfig.inputs;
+  final themes = colorsConfig.outputs.themes;
+
   final buffer = StringBuffer();
   final className = colorsConfig.outputs.className;
   buffer.writeln('// dart format width=${formatter.pageWidth}');
@@ -30,34 +32,31 @@ String generateColors(
   buffer.writeln("import 'package:flutter/painting.dart';");
   buffer.writeln("import 'package:flutter/material.dart';");
   buffer.writeln();
-  buffer.writeln('class $className {');
-  buffer.writeln('$className._();');
+  buffer.writeln('abstract final class $className {');
   buffer.writeln();
 
-  final colorList = <_Color>[];
-  colorsConfig.inputs
-      .map((file) => ColorPath(join(pubspecFile.parent.path, file)))
-      .forEach((colorFile) {
-    final data = colorFile.file.readAsStringSync();
-    if (colorFile.isXml) {
-      colorList.addAll(
-        XmlDocument.parse(data).findAllElements('color').map((element) {
-          return _Color.fromXmlElement(element);
-        }),
-      );
-    } else {
-      throw 'Not supported file type ${colorFile.mime}.';
-    }
-  });
+  for (var i = 0; i < inputs.length; i++) {
+    buffer.writeln(
+      _generateThemeColorsContainer(className, inputs[i], themes[i]),
+    );
+  }
 
-  colorList
-      .distinctBy((color) => color.name)
-      .sortedBy((color) => color.name)
-      .map(_colorStatement)
-      .forEach(buffer.write);
+  buffer.writeln(_generateWithThemeFunction(className, inputs, themes));
 
   buffer.writeln('}');
+
+  buffer.writeln(
+    _generateSealedColorClassesWithTheme(className, inputs.first),
+  );
+
+  for (var i = 0; i < inputs.length; i++) {
+    buffer.writeln(
+      _generateThemeColors(className, inputs[i], themes[i]),
+    );
+  }
+
   return formatter.format(buffer.toString());
+  // return buffer.toString();
 }
 
 String _colorStatement(_Color color) {
@@ -66,7 +65,8 @@ String _colorStatement(_Color color) {
     final swatch = swatchFromPrimaryHex(color.hex);
     final statement = '''/// MaterialColor: 
         ${swatch.entries.map((e) => '///   ${e.key}: ${hexFromColor(e.value)}').join('\n')}
-        static const MaterialColor ${color.name.camelCase()} = MaterialColor(
+        @override
+        MaterialColor get ${color.name.camelCase()} => const MaterialColor(
     ${swatch[500]},
     <int, Color>{
       ${swatch.entries.map((e) => '${e.key}: Color(${e.value}),').join('\n')}
@@ -78,7 +78,8 @@ String _colorStatement(_Color color) {
     final accentSwatch = accentSwatchFromPrimaryHex(color.hex);
     final statement = '''/// MaterialAccentColor: 
         ${accentSwatch.entries.map((e) => '///   ${e.key}: ${hexFromColor(e.value)}').join('\n')}
-        static const MaterialAccentColor ${color.name.camelCase()}Accent = MaterialAccentColor(
+        @override
+        MaterialAccentColor get ${color.name.camelCase()}Accent => const MaterialAccentColor(
    ${accentSwatch[200]},
    <int, Color>{
      ${accentSwatch.entries.map((e) => '${e.key}: Color(${e.value}),').join('\n')}
@@ -89,11 +90,144 @@ String _colorStatement(_Color color) {
   if (color.isNormal) {
     final comment = '/// Color: ${color.hex}';
     final statement =
-        '''static const Color ${color.name.camelCase()} = Color(${colorFromHex(color.hex)});''';
+        '''Color get ${color.name.camelCase()} => const Color(${colorFromHex(color.hex)});''';
+
+    buffer.writeln(comment);
+    buffer.writeln('@override');
+    buffer.writeln(statement);
+  }
+  return buffer.toString();
+}
+
+String _abstractColorStatement(_Color color) {
+  final buffer = StringBuffer();
+  if (color.isMaterial) {
+    final swatch = swatchFromPrimaryHex(color.hex);
+    final statement = '''/// MaterialColor: 
+        ${swatch.entries.map((e) => '///   ${e.key}: ${color.name.camelCase()}[${e.value}]').join('\n')}
+        MaterialColor get ${color.name.camelCase()};''';
+    buffer.writeln(statement);
+  }
+  if (color.isMaterialAccent) {
+    final accentSwatch = accentSwatchFromPrimaryHex(color.hex);
+    final statement = '''/// MaterialAccentColor: 
+        ${accentSwatch.entries.map((e) => '///   ${e.key}: ${color.name.camelCase()}[${e.value}]').join('\n')}
+        MaterialAccentColor get ${color.name.camelCase()}Accent;''';
+    buffer.writeln(statement);
+  }
+  if (color.isNormal) {
+    final comment = '/// Color: ${color.name.camelCase()}';
+    final statement = '''Color get ${color.name.camelCase()};''';
 
     buffer.writeln(comment);
     buffer.writeln(statement);
   }
+  return buffer.toString();
+}
+
+String _generateWithThemeFunction(
+  String className,
+  List<String> inputs,
+  List<String> themes,
+) {
+  final buffer = StringBuffer();
+
+  buffer.writeln(
+    'static ${className}Theme withTheme(${className}Theme theme) => switch(theme) {',
+  );
+  for (final theme in themes) {
+    buffer.writeln(
+      '${theme.capitalize() + className}() => ${theme.capitalize() + className}._(),',
+    );
+  }
+  buffer.writeln('};');
+
+  return buffer.toString();
+}
+
+String _generateSealedColorClassesWithTheme(
+  String className,
+  String input,
+) {
+  final buffer = StringBuffer();
+
+  buffer
+    ..writeln('sealed class ${className}Theme {')
+    ..writeln('const ${className}Theme._();');
+
+  final colorList = <_Color>[];
+  final colorFile = ColorPath(input);
+  final data = colorFile.file.readAsStringSync();
+  if (colorFile.isXml) {
+    colorList
+        .addAll(XmlDocument.parse(data).findAllElements('color').map((element) {
+      return _Color.fromXmlElement(element);
+    }));
+  } else {
+    throw 'Not supported file type ${colorFile.mime}.';
+  }
+
+  colorList
+      .distinctBy((color) => color.name)
+      .sortedBy((color) => color.name)
+      .map(_abstractColorStatement)
+      .forEach(buffer.write);
+
+  buffer.writeln('}');
+
+  return buffer.toString();
+}
+
+String _generateThemeColorsContainer(
+  String className,
+  String input,
+  String theme,
+) {
+  final buffer = StringBuffer();
+
+  buffer
+    ..writeln('/// Colors for theme: $theme')
+    ..writeln('/// with input: $input')
+    ..writeln(
+      'static const ${theme.capitalize() + className} $theme = ${theme.capitalize() + className}._();',
+    );
+
+  return buffer.toString();
+}
+
+String _generateThemeColors(
+  String className,
+  String input,
+  String theme,
+) {
+  final buffer = StringBuffer();
+
+  buffer
+    ..writeln(
+        'final class ${theme.capitalize() + className} extends ${className}Theme {')
+    ..writeln('const ${theme.capitalize() + className}._(): super._();')
+    ..writeln();
+
+  final colorList = <_Color>[];
+  final colorFile = ColorPath(input);
+  final data = colorFile.file.readAsStringSync();
+  if (colorFile.isXml) {
+    colorList
+        .addAll(XmlDocument.parse(data).findAllElements('color').map((element) {
+      return _Color.fromXmlElement(element);
+    }));
+  } else {
+    throw 'Not supported file type ${colorFile.mime}.';
+  }
+
+  colorList
+      .distinctBy((color) => color.name)
+      .sortedBy((color) => color.name)
+      .map(_colorStatement)
+      .forEach(buffer.write);
+
+  buffer.writeln('}');
+
   return buffer.toString();
 }
 

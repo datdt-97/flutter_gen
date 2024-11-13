@@ -1,5 +1,7 @@
 import 'dart:io' show Directory, File;
 
+import 'package:dart_style/dart_style.dart';
+import 'package:dartx/dartx.dart';
 import 'package:flutter_gen_core/generators/assets_generator.dart';
 import 'package:flutter_gen_core/generators/colors_generator.dart';
 import 'package:flutter_gen_core/generators/fonts_generator.dart';
