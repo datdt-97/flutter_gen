@@ -110,13 +110,15 @@ Future<(String, String)> runColorsGen(
   final config = loadPubspecConfig(pubspecFile, buildFile: buildFile);
   final formatter = buildDartFormatterFromConfig(config);
 
-  final actual = generateColors(
-    pubspecFile,
-    formatter,
-    config.pubspec.flutterGen.colors,
+  final actual =ColorsGenerator(
+    pubspecFile: pubspecFile,
+    formatter: formatter,
+    config: config.pubspec.flutterGen.colors,
+  ).build();
+  final expected = formatter.format(
+    File(fact).readAsStringSync().replaceAll('\r\n', '\n'),
   );
-  final expected = formatter.format(File(fact).readAsStringSync());
-  return (actual, expected);
+  return [actual, expected];
 }
 
 /// Colors

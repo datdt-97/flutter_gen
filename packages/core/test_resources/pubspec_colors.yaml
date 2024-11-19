@@ -11,3 +11,8 @@ flutter_gen:
       - assets/color/colors.xml
       - assets/color/colors2.xml
       - assets/color/colors2.xml # duplicated
+    outputs:
+      style: dot-delimiter
+      themes:
+          - dark
+          - light

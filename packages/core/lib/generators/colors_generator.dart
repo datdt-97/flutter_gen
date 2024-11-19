@@ -10,225 +10,345 @@ import 'package:flutter_gen_core/utils/error.dart';
 import 'package:flutter_gen_core/utils/string.dart';
 import 'package:xml/xml.dart';
 
-String generateColors(
-  File pubspecFile,
-  DartFormatter formatter,
-  FlutterGenColors colorsConfig,
-) {
-  if (colorsConfig.inputs.isEmpty) {
-    throw const InvalidSettingsException(
-      'The value of "flutter_gen/colors:" is incorrect.',
-    );
+class ColorsGenerator {
+  final File pubspecFile;
+  final FlutterGenColors config;
+  final DartFormatter formatter;
+
+  String get className => config.outputs.className;
+
+  List<String> get inputs => config.inputs;
+
+  List<String> get themes => config.outputs.themes;
+
+  ColorsGenerator({
+    required this.pubspecFile,
+    required this.config,
+    required this.formatter,
+  }) : assert(
+          config.inputs.isNotEmpty,
+          throw const InvalidSettingsException(
+            'The value of "flutter_gen/colors:" is incorrect.',
+          ),
+        );
+
+  String build() {
+    final buffer = StringBuffer();
+    final className = config.outputs.className;
+    buffer.writeln(header);
+    buffer.writeln(ignore);
+    buffer.writeln("import 'package:flutter/painting.dart';");
+    buffer.writeln("import 'package:flutter/material.dart';");
+    buffer.writeln();
+    buffer.writeln('abstract final class $className {');
+    buffer.writeln();
+
+    for (var i = 0; i < inputs.length; i++) {
+      buffer.writeln(
+        _generateThemeColorsContainer(className, inputs[i], themes[i]),
+      );
+    }
+
+    buffer.writeln('}');
+
+    for (var i = 0; i < inputs.length; i++) {
+      buffer.writeln(
+        _generateThemeColors(className, inputs[i], themes[i]),
+      );
+    }
+
+    buffer
+      ..writeln(_generateColorsExtension(className, inputs.first))
+      ..writeln(_generateTheme(className, inputs, themes))
+      ..writeln(_generateThemeDataExtension(className))
+      ..writeln(_generateThemeGetterExtension());
+
+    return formatter.format(buffer.toString());
   }
 
-  final inputs = colorsConfig.inputs;
-  final themes = colorsConfig.outputs.themes;
+  String _generateThemeColorsContainer(
+    String className,
+    String input,
+    String theme,
+  ) {
+    final buffer = StringBuffer();
 
-  final buffer = StringBuffer();
-  final className = colorsConfig.outputs.className;
-  buffer.writeln('// dart format width=${formatter.pageWidth}');
-  buffer.writeln(header);
-  buffer.writeln(ignore);
-  buffer.writeln("import 'package:flutter/painting.dart';");
-  buffer.writeln("import 'package:flutter/material.dart';");
-  buffer.writeln();
-  buffer.writeln('abstract final class $className {');
-  buffer.writeln();
+    buffer
+      ..writeln('/// Colors for theme: $theme')
+      ..writeln('/// with input: $input')
+      ..writeln(
+        'static const ${theme.capitalize() + className} $theme = ${theme.capitalize() + className}._();',
+      );
 
-  for (var i = 0; i < inputs.length; i++) {
+    return buffer.toString();
+  }
+
+  String _generateThemeColors(
+    String className,
+    String input,
+    String theme,
+  ) {
+    final buffer = StringBuffer();
+
+    buffer
+      ..writeln('final class ${theme.capitalize() + className} {')
+      ..writeln('const ${theme.capitalize() + className}._();')
+      ..writeln();
+
     buffer.writeln(
-      _generateThemeColorsContainer(className, inputs[i], themes[i]),
+      _generateColors(input, mapper: _colorStatement),
     );
+
+    buffer.writeln('}');
+
+    return buffer.toString();
   }
 
-  buffer.writeln(_generateWithThemeFunction(className, inputs, themes));
+  String _generateColorsExtension(
+    String className,
+    String input,
+  ) {
+    final buffer = StringBuffer();
 
-  buffer.writeln('}');
+    buffer
+      ..writeln(
+          'final class ${className}Extension extends ThemeExtension<${className}Extension> {')
+      ..writeln();
 
-  buffer.writeln(
-    _generateSealedColorClassesWithTheme(className, inputs.first),
-  );
-
-  for (var i = 0; i < inputs.length; i++) {
     buffer.writeln(
-      _generateThemeColors(className, inputs[i], themes[i]),
+      _generateColors(input, mapper: _colorVariable),
     );
+
+    buffer.writeln('${className}Extension({');
+
+    buffer.writeln(
+      _generateColors(input, mapper: _requiredColorParam),
+    );
+
+    buffer
+      ..writeln('});')
+      ..writeln();
+
+    buffer
+      ..writeln('@override')
+      ..writeln('ThemeExtension<${className}Extension> copyWith({');
+
+    buffer.writeln(
+      _generateColors(
+        input,
+        mapper: (color) => _requiredColorParam(color, isOptionalType: true),
+      ),
+    );
+
+    buffer.writeln('}) {');
+
+    buffer.writeln('return ${className}Extension(');
+
+    buffer.writeln(
+      _generateColors(
+        input,
+        mapper: (color) {
+          final name = color.name.camelCase();
+          return '$name: $name ?? this.$name,';
+        },
+      ),
+    );
+
+    buffer.writeln(');');
+
+    buffer
+      ..writeln('}')
+      ..writeln();
+
+    buffer.writeln('''
+  @override
+  ThemeExtension<${className}Extension> lerp(covariant ThemeExtension<${className}Extension>? other, double t,) {
+    if (other is! ${className}Extension) {
+      return this;
+    }
+    
+    return ${className}Extension(
+  ''');
+
+    buffer.writeln(
+      _generateColors(
+        input,
+        mapper: (color) {
+          final name = color.name.camelCase();
+          return '$name: Color.lerp($name, other.$name, t,)!,';
+        },
+      ),
+    );
+
+    buffer
+      ..writeln(');')
+      ..writeln('}');
+
+    buffer.writeln('}');
+
+    return buffer.toString();
   }
 
-  return formatter.format(buffer.toString());
-  // return buffer.toString();
-}
+  String _generateTheme(
+    String className,
+    List<String> inputs,
+    List<String> themes,
+  ) {
+    final buffer = StringBuffer();
+    buffer.writeln('class ${className}Theme {');
 
-String _colorStatement(_Color color) {
-  final buffer = StringBuffer();
-  if (color.isMaterial) {
-    final swatch = swatchFromPrimaryHex(color.hex);
-    final statement = '''/// MaterialColor: 
+    for (var i = 0; i < inputs.length; i++) {
+      buffer.writeln('''
+    //
+    // ${themes[i]} theme
+    //
+
+    ''');
+
+      buffer.writeln('''
+    static final ${themes[i]} = ThemeData.${themes[i]}().copyWith(
+      extensions: [
+        _${themes[i]}${className}Extension,
+      ],
+    );
+    ''');
+
+      buffer.writeln(
+        'static final _${themes[i]}${className}Extension = ${className}Extension(',
+      );
+
+      buffer.writeln(
+        _generateColors(inputs[i], mapper: (color) {
+          final name = color.name.camelCase();
+          return '$name: $className.${themes[i]}.$name,';
+        }),
+      );
+
+      buffer
+        ..writeln(');')
+        ..writeln();
+    }
+
+    buffer.writeln('}');
+    return buffer.toString();
+  }
+
+  String _generateThemeDataExtension(String className) {
+    return '''
+  extension ${className}ThemeExtension on ThemeData {
+    /// Usage example: Theme.of(context).appColors;
+    ${className}Extension get appColors => extension<${className}Extension>() ?? ${className}Theme._light${className}Extension;
+  }
+  ''';
+  }
+
+  String _generateThemeGetterExtension() {
+    return '''
+      extension ThemeGetter on BuildContext {
+        // Usage example: `context.theme`
+        ThemeData get theme => Theme.of(this);
+      }
+    ''';
+  }
+
+  String _requiredColorParam(
+    _Color color, {
+    bool isOptionalType = false,
+  }) {
+    final buffer = StringBuffer();
+    if (isOptionalType) {
+      final type = switch (color) {
+        _ when color.isMaterial => 'MaterialColor',
+        _ when color.isMaterialAccent => 'MaterialAccentColor',
+        _ when color.isNormal => 'Color',
+        _ => '',
+      };
+      buffer.writeln('$type? ${color.name.camelCase()},');
+    } else {
+      buffer.writeln('required this.${color.name.camelCase()},');
+    }
+    return buffer.toString();
+  }
+
+  String _colorVariable(_Color color) {
+    final buffer = StringBuffer();
+
+    final type = switch (color) {
+      _ when color.isMaterial => 'MaterialColor',
+      _ when color.isMaterialAccent => 'MaterialAccentColor',
+      _ when color.isNormal => 'Color',
+      _ => '',
+    };
+
+    buffer.writeln('final $type ${color.name.camelCase()};');
+
+    return buffer.toString();
+  }
+
+  String _colorStatement(_Color color) {
+    final buffer = StringBuffer();
+    if (color.isMaterial) {
+      final swatch = swatchFromPrimaryHex(color.hex);
+      final statement = '''/// MaterialColor: 
         ${swatch.entries.map((e) => '///   ${e.key}: ${hexFromColor(e.value)}').join('\n')}
-        @override
         MaterialColor get ${color.name.camelCase()} => const MaterialColor(
     ${swatch[500]},
     <int, Color>{
       ${swatch.entries.map((e) => '${e.key}: Color(${e.value}),').join('\n')}
     },
   );''';
-    buffer.writeln(statement);
-  }
-  if (color.isMaterialAccent) {
-    final accentSwatch = accentSwatchFromPrimaryHex(color.hex);
-    final statement = '''/// MaterialAccentColor: 
+      buffer.writeln(statement);
+    }
+    if (color.isMaterialAccent) {
+      final accentSwatch = accentSwatchFromPrimaryHex(color.hex);
+      final statement = '''/// MaterialAccentColor: 
         ${accentSwatch.entries.map((e) => '///   ${e.key}: ${hexFromColor(e.value)}').join('\n')}
-        @override
         MaterialAccentColor get ${color.name.camelCase()}Accent => const MaterialAccentColor(
    ${accentSwatch[200]},
    <int, Color>{
      ${accentSwatch.entries.map((e) => '${e.key}: Color(${e.value}),').join('\n')}
     },
   );''';
-    buffer.writeln(statement);
+      buffer.writeln(statement);
+    }
+    if (color.isNormal) {
+      final comment = '/// Color: ${color.hex}';
+      final statement =
+          '''Color get ${color.name.camelCase()} => const Color(${colorFromHex(color.hex)});''';
+
+      buffer.writeln(comment);
+      buffer.writeln(statement);
+    }
+    return buffer.toString();
   }
-  if (color.isNormal) {
-    final comment = '/// Color: ${color.hex}';
-    final statement =
-        '''Color get ${color.name.camelCase()} => const Color(${colorFromHex(color.hex)});''';
 
-    buffer.writeln(comment);
-    buffer.writeln('@override');
-    buffer.writeln(statement);
-  }
-  return buffer.toString();
-}
+  String _generateColors(
+    String input, {
+    required String Function(_Color color) mapper,
+  }) {
+    final buffer = StringBuffer();
 
-String _abstractColorStatement(_Color color) {
-  final buffer = StringBuffer();
-  if (color.isMaterial) {
-    final swatch = swatchFromPrimaryHex(color.hex);
-    final statement = '''/// MaterialColor: 
-        ${swatch.entries.map((e) => '///   ${e.key}: ${color.name.camelCase()}[${e.value}]').join('\n')}
-        MaterialColor get ${color.name.camelCase()};''';
-    buffer.writeln(statement);
-  }
-  if (color.isMaterialAccent) {
-    final accentSwatch = accentSwatchFromPrimaryHex(color.hex);
-    final statement = '''/// MaterialAccentColor: 
-        ${accentSwatch.entries.map((e) => '///   ${e.key}: ${color.name.camelCase()}[${e.value}]').join('\n')}
-        MaterialAccentColor get ${color.name.camelCase()}Accent;''';
-    buffer.writeln(statement);
-  }
-  if (color.isNormal) {
-    final comment = '/// Color: ${color.name.camelCase()}';
-    final statement = '''Color get ${color.name.camelCase()};''';
+    final colorList = <_Color>[];
+    final colorFile = ColorPath(input);
+    final data = colorFile.file.readAsStringSync();
+    if (colorFile.isXml) {
+      colorList.addAll(
+        XmlDocument.parse(data)
+            .findAllElements('color')
+            .map(_Color.fromXmlElement),
+      );
+    } else {
+      throw 'Not supported file type ${colorFile.mime}.';
+    }
 
-    buffer.writeln(comment);
-    buffer.writeln(statement);
-  }
-  return buffer.toString();
-}
-
-String _generateWithThemeFunction(
-  String className,
-  List<String> inputs,
-  List<String> themes,
-) {
-  final buffer = StringBuffer();
-
-  buffer.writeln(
-    'static ${className}Theme withTheme(${className}Theme theme) => switch(theme) {',
-  );
-  for (final theme in themes) {
-    buffer.writeln(
-      '${theme.capitalize() + className}() => ${theme.capitalize() + className}._(),',
-    );
-  }
-  buffer.writeln('};');
-
-  return buffer.toString();
-}
-
-String _generateSealedColorClassesWithTheme(
-  String className,
-  String input,
-) {
-  final buffer = StringBuffer();
-
-  buffer
-    ..writeln('sealed class ${className}Theme {')
-    ..writeln('const ${className}Theme._();');
-
-  final colorList = <_Color>[];
-  final colorFile = ColorPath(input);
-  final data = colorFile.file.readAsStringSync();
-  if (colorFile.isXml) {
     colorList
-        .addAll(XmlDocument.parse(data).findAllElements('color').map((element) {
-      return _Color.fromXmlElement(element);
-    }));
-  } else {
-    throw 'Not supported file type ${colorFile.mime}.';
+        .distinctBy((color) => color.name)
+        .sortedBy((color) => color.name)
+        .map(mapper)
+        .forEach(buffer.write);
+
+    return buffer.toString();
   }
-
-  colorList
-      .distinctBy((color) => color.name)
-      .sortedBy((color) => color.name)
-      .map(_abstractColorStatement)
-      .forEach(buffer.write);
-
-  buffer.writeln('}');
-
-  return buffer.toString();
-}
-
-String _generateThemeColorsContainer(
-  String className,
-  String input,
-  String theme,
-) {
-  final buffer = StringBuffer();
-
-  buffer
-    ..writeln('/// Colors for theme: $theme')
-    ..writeln('/// with input: $input')
-    ..writeln(
-      'static const ${theme.capitalize() + className} $theme = ${theme.capitalize() + className}._();',
-    );
-
-  return buffer.toString();
-}
-
-String _generateThemeColors(
-  String className,
-  String input,
-  String theme,
-) {
-  final buffer = StringBuffer();
-
-  buffer
-    ..writeln(
-        'final class ${theme.capitalize() + className} extends ${className}Theme {')
-    ..writeln('const ${theme.capitalize() + className}._(): super._();')
-    ..writeln();
-
-  final colorList = <_Color>[];
-  final colorFile = ColorPath(input);
-  final data = colorFile.file.readAsStringSync();
-  if (colorFile.isXml) {
-    colorList
-        .addAll(XmlDocument.parse(data).findAllElements('color').map((element) {
-      return _Color.fromXmlElement(element);
-    }));
-  } else {
-    throw 'Not supported file type ${colorFile.mime}.';
-  }
-
-  colorList
-      .distinctBy((color) => color.name)
-      .sortedBy((color) => color.name)
-      .map(_colorStatement)
-      .forEach(buffer.write);
-
-  buffer.writeln('}');
-
-  return buffer.toString();
 }
 
 class _Color {

@@ -21,14 +21,13 @@ void main() {
       final config = loadPubspecConfig(pubspec);
       final formatter = buildDartFormatterFromConfig(config);
 
-      expect(
-        () => generateColors(
-          pubspec,
-          formatter,
-          config.pubspec.flutterGen.colors,
-        ),
-        throwsA(isA<InvalidSettingsException>()),
-      );
+      expect(() {
+        return ColorsGenerator(
+          pubspecFile: pubspec,
+          formatter: formatter,
+          config: config.pubspec.flutterGen.colors,
+        ).build();
+      }, throwsA(isA<InvalidSettingsException>()));
     });
 
     test('Wrong colors settings on pubspec.yaml', () async {
@@ -36,16 +35,13 @@ void main() {
       final config = loadPubspecConfig(pubspec);
       final formatter = buildDartFormatterFromConfig(config);
 
-      expect(
-        () {
-          return generateColors(
-            pubspec,
-            formatter,
-            config.pubspec.flutterGen.colors,
-          );
-        },
-        throwsA(isA<InvalidSettingsException>()),
-      );
+      expect(() {
+        return ColorsGenerator(
+          pubspecFile: pubspec,
+          formatter: formatter,
+          config: config.pubspec.flutterGen.colors,
+        ).build();
+      }, throwsA(isA<InvalidSettingsException>()));
     });
 
     test('ColorPath Tests', () async {

@@ -25,3 +25,8 @@ dependencies:
 
 dev_dependencies:
   lints: any # Ignoring the version to allow editing across SDK versions.
+  build_test: ^2.0.0
+
+# dependency_overrides:
+#   flutter_gen_core:
+#     path: ../core
