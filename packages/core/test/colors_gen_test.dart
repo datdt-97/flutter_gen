@@ -26,8 +26,11 @@ void main() {
           pageWidth: config.pubspec.flutterGen.lineLength, lineEnding: '\n');
 
       expect(() {
-        return generateColors(
-            pubspec, formatter, config.pubspec.flutterGen.colors);
+        return ColorsGenerator(
+          pubspecFile: pubspec,
+          formatter: formatter,
+          config: config.pubspec.flutterGen.colors,
+        ).build();
       }, throwsA(isA<InvalidSettingsException>()));
     });
 
@@ -38,8 +41,11 @@ void main() {
           pageWidth: config.pubspec.flutterGen.lineLength, lineEnding: '\n');
 
       expect(() {
-        return generateColors(
-            pubspec, formatter, config.pubspec.flutterGen.colors);
+        return ColorsGenerator(
+          pubspecFile: pubspec,
+          formatter: formatter,
+          config: config.pubspec.flutterGen.colors,
+        ).build();
       }, throwsA(isA<InvalidSettingsException>()));
     });
 
